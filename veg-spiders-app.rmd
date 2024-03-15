@@ -1,0 +1,737 @@
+---
+output: html_document
+runtime: shiny
+---
+
+<style type="text/css">
+.main-container {
+  max-width: 1800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+```{r setup-workspace, include=FALSE}
+
+# TO DO
+## link to spider dat (will need real 2022 data to do so)
+
+# load all required packages
+library(DT)
+library(lubridate)
+library(ragg)
+library(readxl)
+library(rstatix)
+library(shiny)
+library(shinyjs) 
+library(writexl)
+library(tidyverse) # always last to avoid conflicts
+
+# triadic feature colours
+triL_col <- "#7D31ED" # purple
+triM_col <- "#ED7D31" # orange
+triR_col <- "#13d863" # green -- adjusted darker 
+
+# negated inclusive operator
+"%!in%" <- Negate("%in%")
+
+# prevent r errors etc. appearing to user
+knitr::opts_chunk$set(echo = FALSE)
+
+# set filepath root: is doc being loaded as a Shiny app or run interactively?
+if (interactive() == TRUE) {
+  picky_path = "biol2015/"
+} else {
+  picky_path = ""
+}
+```
+
+```{r import-data, include=FALSE}
+
+# import veg masterdata -- multiple sheets
+# get all sheets
+sheet_list <- excel_sheets(paste0(picky_path,
+                                  "data/raw/M2-A1_2017-2023.xlsx"))
+
+all_sheets <- map(.x = sheet_list,
+                        .f = function(.x) {
+                          read_excel(paste0(picky_path,
+                                            "data/raw/M2-A1_2017-2023.xlsx"),
+                                     sheet = .x,
+                                     na = c("", "N/A"))
+                        })
+
+all_sheets_named <- set_names(all_sheets,
+                              paste0("raw_", sheet_list))
+
+# add imported sheets to global environment, 
+# using their list names
+list2env(all_sheets_named,
+         envir = .GlobalEnv)
+
+# repeat for spiders -- terrible form here, but time is of the essence
+sheet_list <- excel_sheets(paste0(picky_path,
+                                  "data/raw/M2-A2_2019-2023.xlsx"))
+
+all_sheets <- map(.x = sheet_list,
+                  .f = function(.x) {
+                    read_excel(paste0(picky_path,
+                                      "data/raw/M2-A2_2019-2023.xlsx"),
+                               sheet = .x,
+                               na = c("", "N/A"))
+                  })
+
+all_sheets_named <- set_names(all_sheets,
+                              paste0("raw_", sheet_list))
+
+# add imported sheets to global environment, 
+# using their list names
+list2env(all_sheets_named,
+         envir = .GlobalEnv)
+
+# tidy datasets as required -- most do not need tidying
+
+# add group names from burrow_diam to burrow_count using quad_year identifier
+quad_name_ref <- raw_burrow_diameter %>% 
+  select(quad_year, group_name, area) %>% 
+  distinct(quad_year,
+           .keep_all = TRUE)
+
+# and sum burrow counts, across any multiple surveys within each group name
+burrow_count <- raw_burrow_count %>% 
+  select(-group_name) %>% # trash col in this dataset
+  left_join(., quad_name_ref,
+            by = "quad_year") %>% 
+  mutate(burrow_count = 100 / area * burrow_count)
+
+# remove hanger-on NAs from bottom of veg_metadata
+veg_metadata <- raw_veg_metadata %>% 
+  filter(!is.na(variable))
+
+spider_metadata <- raw_spider_metadata
+
+# full metadata reference for plotting code
+## MOVED TO BELOW with processed_metadata
+
+sac <- raw_species_area_curve %>% 
+  filter(quadrat_area == 256)
+
+small_quadrats <- raw_small_quadrats %>% 
+  group_by(year, group_name, 
+           lat, lon, alt) %>% 
+  summarise(across(c(foliage_projective_cover,
+                     living_ground_cover,
+                     litter_cover),
+                   mean, na.rm = TRUE)) %>% 
+  ungroup()
+  
+us_estimates <- raw_understorey_estimates %>% 
+  group_by(year, group_name, 
+           lat, lon, alt) %>% 
+  summarise(across(c(small_trees,
+                     `small_shrub`,
+                     `big_shrub`),
+                   mean, na.rm = TRUE)) %>% 
+  ungroup() 
+
+tall_trees <- raw_tallest_trees %>% 
+  group_by(year, group_name, 
+           lat, lon, alt) %>% 
+  summarise(across(c(circum, dbh,
+                     basal_area,
+                     height),
+                   mean, na.rm = TRUE)) %>% 
+  ungroup() 
+
+# doesn't matter because burrow diameter is no longer offered for plotting
+# but ANYWAY...
+burrow_diam <- raw_burrow_diameter %>% 
+  group_by(group_name) %>% 
+  mutate(burrow_diam = mean(burrow_diam, na.rm = TRUE),
+         lat = mean(lat_red, na.rm = TRUE),
+         lon = mean(lon_red, na.rm = TRUE)) %>%
+  ungroup() %>% 
+  distinct(quad_year, .keep_all = TRUE) %>% 
+  group_by(group_name) %>% 
+  mutate(area = sum(area)) %>% 
+  ungroup() %>% 
+  distinct(group_name, .keep_all = TRUE) %>% 
+  select(-c(year, date, quadrat, quad_year,
+            lat_red, lon_red, coords_site))
+
+# we do need this -- because historic quadrats under the same group name
+# are not necessarily together -- may be far apart along the walk
+burrow <- left_join(burrow_count, tall_trees,
+                    by = "group_name",
+            suffix = c("", ".remove")) %>%
+  left_join(., us_estimates,
+            by = "group_name",
+            suffix = c("", ".remove")) %>%
+  left_join(., small_quadrats,
+            by = "group_name",
+            suffix = c("", ".remove")) %>%
+  left_join(., sac,
+            by = "group_name",
+            suffix = c("", ".remove")) %>%
+  select(-c(contains(".remove"), date, 
+            quadrat, area, quadrat_area))
+
+# # save tidied veg datasets
+# write_xlsx(list(tallest_trees = tall_trees,
+#                 understorey_estimates = us_estimates,
+#                 small_quadrats = small_quadrats,
+#                 species_area_curve = sac),
+#            "biol2015/data/output/2023_quadrat_level_veg.xlsx",
+#            format_headers = FALSE)
+
+# save tidied spider data
+# write_xlsx(list(burrows = burrow),
+#            "biol2015/data/output/2023_quadrat_level_spiders.xlsx",
+#            format_headers = FALSE)
+
+# worked offline to combine, linking 2022 sites only
+# load that neater file now
+processed_data_veg <- read_excel("data/output/processed_2023_M2-A1-A2_data.xlsx",
+                             sheet = "veg_data") %>% 
+  mutate(year = as_factor(year))
+
+processed_data_spiders <- read_excel("data/output/processed_2023_M2-A1-A2_data.xlsx",
+                             sheet = "spider_data") %>% 
+  mutate(year = as_factor(year))
+
+processed_metadata <- read_excel("data/output/processed_2023_M2-A1-A2_data.xlsx",
+                             sheet = "comb_metadata_key") %>% 
+  filter(dataset != "no_show")
+
+metadata <- bind_rows(veg_metadata, spider_metadata) %>% 
+  left_join(processed_metadata, .,
+            by = "variable") %>% 
+  distinct(variable, .keep_all = TRUE)
+
+# create option lists for selectInput()s
+choices_prep <- function (data) {
+  cont_pred <- c(data %>% 
+                   filter(cate_cont_type == "cont" &
+                            pred_resp_type %in% c("pred", "both")) %>% 
+                   pull(var = variable,
+                        name = illegal_variable))
+  
+  cate_pred <- c(data %>% 
+                   filter(cate_cont_type == "cate" &
+                            pred_resp_type %in% c("pred", "both")) %>% 
+                   pull(var = variable,
+                        name = illegal_variable))
+  
+  cont_resp <- c(data %>% 
+                   filter(cate_cont_type == "cont" &
+                            pred_resp_type %in% c("resp", "both")) %>% 
+                   pull(var = variable,
+                        name = illegal_variable))
+  
+  return(list(cont_pred, cate_pred, cont_resp))
+}
+
+veg_choices <- choices_prep(veg_metadata)
+spider_choices <- choices_prep(spider_metadata)
+
+cont_preds <- list(" " = list("Nothing selected" = "not_sel"),
+                   "Veg variables: " = veg_choices[[1]],
+                   "Spider variables: " = spider_choices[[1]])
+
+cate_preds <- list(" " = list("Nothing selected" = "not_sel"),
+                   "Veg variables: " = veg_choices[[2]],
+                   "Spider variables: " = spider_choices[[2]])
+
+cont_resps <- list(" " = list("Nothing selected" = "not_sel"),
+                   "Veg variables: " = veg_choices[[3]],
+                   "Spider variables: " = spider_choices[[3]])
+
+```
+
+# Module 2 --- soil, vegetation and spiders
+### BIOL2015 Field Ecology
+###### v1.7 | 28/06/2023 | jwh  
+
+## {.tabset}
+
+### 1. Design a figure
+
+Select a predictor (x axis) and response (y axis) variable to plot a figure. You can either use a continuous or categorical predictor. 
+
+``` {r design-plot}
+
+# select: choose a predictor (x) and response (y) var for plot
+inputPanel(
+  selectInput(inputId = "cont_pred_chce",
+              label = "Continuous predictors...",
+              choices = cont_preds),
+  selectInput(inputId = "cate_pred_chce",
+              label = "Categorical predictors...",
+              choices = cate_preds),
+  selectInput(inputId = "cont_resp_chce",
+              label = "Continuous responses...",
+              choices = cont_resps),
+)
+
+# make a reactive values object
+rv <- reactiveValues()
+
+# initialise plot variables as not selected
+rv$x_term <- "not_sel"
+rv$y_term <- "not_sel"
+
+# and first time flag for the disclaimer
+rv$first_time <- TRUE
+
+```
+
+```{r build-relevant-dat}
+  
+# create a tibble of relevant data for plotting/modelling use
+relevant_dat <- reactive({
+  if (rv$x_term == "burrow_count" | rv$y_term == "burrow_count") {
+    processed_data_spiders
+  } else {
+    processed_data_veg
+  }
+  
+  # processed_data
+})
+
+```
+
+```{r form-logic}
+
+# useshinyjs() needs to be in each chunk that uses shinyjs functions
+useShinyjs(rmd = TRUE)
+
+# observe({}) defines some actions that should be taken on some trigger;
+# then piped to bindEvent() which defines the trigger to watch
+observe({
+  if (input$cont_pred_chce != "not_sel") {
+    disable(id = "cate_pred_chce")
+  } else {
+    enable(id = "cate_pred_chce")
+  }
+  rv$x_term <- c(input$cont_pred_chce)
+  rv$cont_or_cate <- "cont"
+}) %>% 
+  bindEvent(input$cont_pred_chce)
+
+observe({
+  if (input$cate_pred_chce != "not_sel") {
+    disable(id = "cont_pred_chce")
+  } else {
+    enable(id = "cont_pred_chce")
+  }
+  rv$x_term <- c(input$cate_pred_chce)
+  rv$cont_or_cate <- "cate"
+}) %>% 
+  bindEvent(input$cate_pred_chce)
+
+reactive({rv$y_term <- c(input$cont_resp_chce)})
+
+```
+
+```{r make-plot}
+
+observe({
+
+  if (rv$x_term != "not_sel" & rv$y_term != "not_sel") {
+    x_term <- sym(rv$x_term)
+    y_term <- sym(rv$y_term)
+    
+    # determine axes labels from metadata reference
+    x_lab <- metadata %>% 
+      filter(variable == rv$x_term) %>% 
+      mutate(label = paste0(illegal_variable,
+                            " (", units, ")")) %>% 
+      pull(label)
+    
+    y_lab <- metadata %>% 
+      filter(variable == rv$y_term) %>% 
+      mutate(label = paste0(illegal_variable,
+                            " (", units, ")")) %>% 
+      pull(label)
+    
+    # data for background plotting 
+    raw_plot_dat <- relevant_dat() %>% 
+      select(!!x_term, !!y_term) %>%
+      filter(is.na(!!x_term) == FALSE,
+             is.na(!!y_term) == FALSE)
+    
+    # continuous predictor; continuous response
+    if (rv$cont_or_cate == "cont") {
+      
+      # make plot of selected variables
+      selected_plot <- ggplot() +
+        geom_point(data = raw_plot_dat,
+                   aes(x = !!x_term,
+                       y = !!y_term),
+                   colour = "grey40") +
+        geom_smooth(data = raw_plot_dat,
+                   aes(x = !!x_term,
+                       y = !!y_term),
+                   colour = "black",
+                   fill = "grey60",
+                   method = "lm") +
+        scale_x_continuous(name = x_lab) +
+        scale_y_continuous(name = y_lab) +
+        theme_classic()
+    }
+    
+    # categorical predictor; continuous response
+    if (rv$cont_or_cate == "cate") {
+      
+      # data for foreground plotting
+      summary_plot_dat <- raw_plot_dat %>% 
+        group_by(!!x_term) %>% 
+        summarise(plot_mean = mean(!!y_term),
+                  plot_se = sd(!!y_term)/sqrt(n())) %>% 
+        ungroup()
+      
+      # make plot of selected variables
+      selected_plot <- ggplot() +
+        geom_point(data = raw_plot_dat,
+                   aes(x = !!x_term,
+                       y = !!y_term),
+                   colour = "grey80",
+                   position = position_jitter(width = 0.2,
+                                              height = 0,
+                                              seed = 2015)) +
+        geom_errorbar(data = summary_plot_dat,
+                      aes(x = !!x_term,
+                          ymin = plot_mean - plot_se,
+                          ymax = plot_mean + plot_se),
+                      colour = "black",
+                      width = 0,
+                      size = 0.75) +
+        geom_point(data = summary_plot_dat,
+                   aes(x = !!x_term,
+                       y = plot_mean),
+                   colour = "black",
+                   size = 2.5) +
+        scale_x_discrete(name = x_lab) +
+        scale_y_continuous(name = y_lab) +
+        theme_classic()
+      
+      rv$summary_plot_dat <- summary_plot_dat
+    }
+   
+    # prepare data for display
+    output$table_summary_plot_dat <- renderDT({
+      datatable(summary_plot_dat,
+                rownames = FALSE,
+                options = list(dom = "t"))
+    })
+    
+    output$table_raw_plot_dat <- renderDT({
+      datatable(raw_plot_dat,
+                rownames = FALSE,
+                options = list(dom = "ltp"))
+    })
+    
+    # prepare plot for display
+    output$plot_selected_plot <- renderPlot({
+      selected_plot
+    })
+    
+    # prepare same plot for printing into ragg save device
+    rv$plot_selected_plot <- selected_plot
+    
+    # ditto for datasets and their save buttons
+    # (summary done in cate-pred if, above)
+    rv$raw_plot_dat <- raw_plot_dat
+    
+  }
+}) %>% bindEvent(input$cont_pred_chce,
+                 input$cate_pred_chce,
+                 input$cont_resp_chce)
+
+```
+
+```{r show-plot}
+
+plotOutput("plot_selected_plot")
+
+```
+
+```{r save-plot}
+
+# if using downloadButton outside of the inputPanel, outside brackets
+# are req'd around the function to make it render in Shiny Rmd
+
+inputPanel(textInput("fig_name",
+                     label = "Enter your first and last names for a unique filename",
+                     placeholder = "e.g. MatthewLuskin"),
+           # textInput("fig_width",
+           #           "Enter a figure width (cm)",
+           #           value = 8,
+           #           placeholder = "I suggest 8"),
+           # textInput("fig_height",
+           #           "Enter a figure height (cm)",
+           #           value = 8,
+           #           placeholder = "I suggest 8"),
+           downloadButton("save_plot",
+                          "Save your created figure..."))
+
+reactive({
+  # fig_width <- c(input$fig_width)
+  # fig_height <- c(input$fig_height)
+  
+  output$save_plot <- downloadHandler(
+    filename = function(){
+      paste0(input$fig_name, 
+             "_shinyfig_",
+             day(now()), "-",
+             hour(now()), "-",
+             minute(now()), ".png")
+    },
+    content = function(file) {
+      ggsave(file,
+             rv$plot_selected_plot,
+             device = "png",
+             width = 10, # width and height are fixed -- cannot seem to get reactive input working
+             height = 8,
+             units = "cm",
+             dpi = 300,
+             scale = 1)
+    }
+  )
+})
+
+```
+
+### 2. View model output
+
+__Raw output of a linear model__ using your selected variables. Interpretation is an exercise left to the viewer. 
+
+```{r show-model}
+
+observe({
+  if (rv$x_term != "not_sel" & rv$y_term != "not_sel") {
+    x_term <- sym(rv$x_term)
+    y_term <- sym(rv$y_term)
+
+    # data for model
+    raw_dat <- relevant_dat() %>%
+      filter(is.na(!!x_term) == FALSE,
+             is.na(!!y_term) == FALSE)
+
+    # make model formula
+    user_specified_formula <- as.formula(paste0(rv$y_term,
+                                                " ~ ",
+                                                rv$x_term))
+    
+    # use model formula in basic lm
+    model1 <- lm(user_specified_formula,
+                 data = relevant_dat())
+
+    # prepare model table for display
+    output$table_model <- renderPrint({
+      summary(model1)
+    })
+    
+    # prepare user formula for display (to reference against output table)
+    output$text_formula <- renderPrint({
+      paste0("User specified formula: ", 
+             rv$y_term, 
+             " ~ ",
+             rv$x_term)
+    })
+    
+  }
+}) %>% bindEvent(input$cont_pred_chce,
+                 input$cate_pred_chce,
+                 input$cont_resp_chce)
+
+# show model output + formula
+verbatimTextOutput("text_formula")
+verbatimTextOutput("table_model")
+
+```
+
+### 3. View selected data
+
+__Table 1.__ Summarised data for your selected variables. 
+
+_(Remember that summary data will not exist for a scatter plot --- you don't need to summarise the data for that plot type!)_
+
+```{r show-summarised-dat}
+
+(downloadButton("save_summary_dat",
+                "Save your summarised data..."))
+
+DTOutput("table_summary_plot_dat")
+
+reactive({
+  output$save_summary_dat <- downloadHandler(
+    filename = function(){
+      paste0(input$fig_name, 
+             "_shinysummarydat_",
+             day(now()), "-",
+             hour(now()), "-",
+             minute(now()), ".csv")
+    },
+    content = function(file) {
+      write_csv(rv$summary_plot_dat,
+                file)
+    }
+  )
+})
+
+
+```
+<br>
+__Table 2.__ Raw data for your selected variables. 
+
+```{r show-raw-dat}
+
+(downloadButton("save_raw_dat",
+                "Save your raw data..."))
+
+DTOutput("table_raw_plot_dat")
+
+reactive({
+  output$save_raw_dat <- downloadHandler(
+    filename = function(){
+      paste0(input$fig_name, 
+             "_shinyrawdat_",
+             day(now()), "-",
+             hour(now()), "-",
+             minute(now()), ".csv")
+    },
+    content = function(file) {
+      write_csv(rv$raw_plot_dat,
+                file)
+    }
+  )
+})
+
+```
+
+### Metadata information
+
+```{r show-metadata}
+
+metadata_for_dt <- metadata %>% 
+  rename("Dataset" = dataset,
+         "Variable name (for R)" = variable,
+         "Variable name (for humans)" = illegal_variable,
+         "Units" = units,
+         "Description" = description) %>% 
+  select(-c(cate_cont_type, pred_resp_type))
+
+output$table_metadata <- renderDT(
+  metadata_for_dt,
+  rownames = FALSE,
+  options = list(pageLength = nrow(metadata),
+                 dom = "ft")
+)
+
+DTOutput("table_metadata")
+
+```
+
+
+```{r exit-and-scratch}
+
+# knitr::knit_exit()
+# 
+# rv$x_term <- "site_type"
+# rv$y_term <- "dbh"
+# 
+# isolate(rv$x_term)
+# isolate(rv$y_term)
+# 
+# formula_test <- as.formula(paste0(isolate(rv$y_term),
+#                                   " ~ ",
+#                                   isolate(rv$x_term)))
+# 
+# lm(formula_test,
+#    data = relevant_dat)
+
+### x. working on a map
+
+# read country and state shapefiles
+# aus_country <- st_read("global/aus_mapping/gadm36_AUS_0.shp")
+# aus_states <- st_read("global/aus_mapping/gadm36_AUS_1.shp")
+# 
+# crop_aus_country <- st_crop(aus_country,
+#                             xmin = 113, xmax = 154,
+#                             ymin = -11, ymax = -44)
+# 
+# crop_aus_states <- st_crop(aus_states,
+#                            xmin = 153.38, xmax = 153.65,
+#                            ymin = -27.37, ymax = -27.51)
+# 
+# # K'gari crop for full map
+# crop_aus_states_upd <- st_crop(aus_states,
+#                                xmin = 153.375, xmax = 153.46,
+#                                ymin = -27.365, ymax = -27.51)
+# 
+# fig_colours <- c("map_fill" = "grey80",
+#                  "map_site_labels" = "grey70",
+#                  "map_points" = "black",
+#                  "map_panel_border" = "grey80")
+# 
+# main_map_upd <- ggplot() +
+#   geom_sf(data = crop_aus_states_upd,
+#           colour = NA,
+#           fill = fig_colours["map_fill"]) +
+#   coord_sf(crs = "+proj=longlat +datum=WGS84",
+#            label_graticule = "ES",
+#            expand = FALSE) +
+#   geom_point(data = tree_full,
+#              aes(x = lon,
+#                  y = lat),
+#              size = 1, colour = fig_colours["map_points"]) +
+#   geom_text(data = tibble(x = c(153.435,
+#                                 153.427,
+#                                 153.42),
+#                           y = c(-27.417,
+#                                 -27.444,
+#                                 -27.467),
+#                           label = c("Amity\nPoint",
+#                                     "Cooroon\nCooroonpah\nCreek",
+#                                     "Myora\nSprings")),
+#             aes(x = x, y = y, label = label),
+#             colour = fig_colours["map_site_labels"],
+#             vjust = "middle", hjust = "right",
+#             size = unit(3.5, units = "points")) + # originally 3.5
+#   geom_text(data = tibble(x = c(153.45,
+#                                 153.45),
+#                           y = c(-27.41,
+#                                 -27.475),
+#                           label = c("high\nenergy",
+#                                     "low\nenergy")),
+#             aes(x = x, y = y, label = label),
+#             fontface = "italic",
+#             vjust = "middle", hjust = "middle",
+#             size = unit(3.5, units = "points")) + 
+#   geom_segment(aes(x = 153.45, 
+#                    y = -27.415, 
+#                    xend = 153.45, 
+#                    yend = -27.47),
+#                size = 0.5,
+#                lineend = "butt", linejoin = "mitre",
+#                arrow = arrow(length = unit(0.5, "cm"))) +
+#   scale_x_continuous(name = "",
+#                      breaks = c(153.41, 153.44)) +
+#   scale_y_continuous(name = "") +
+#   annotation_scale(location = "br",
+#                    width_hint = 0.25,
+#                    text_cex = 0.8) +
+#   theme_hill_map() %+replace%
+#   theme(axis.text.x = element_text(margin = margin(2.5, 0, 0, 0)),
+#         text = element_text(colour = fig_colours["text"]),
+#         axis.ticks = element_line(colour = fig_colours["axis_ticks"]),
+#         panel.background = element_rect(fill = fig_colours["background"],
+#                                         colour = NA),
+#         plot.background = element_rect(fill = fig_colours["background"],
+#                                        colour = NA),
+#         panel.border = element_rect(fill = NA,
+#                                     colour = fig_colours["map_panel_border"]),
+#         axis.line = element_line(colour = fig_colours["axis_line"]))
+
+```
