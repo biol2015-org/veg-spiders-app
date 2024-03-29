@@ -15,7 +15,8 @@ runtime: shiny
 
 # TO DO
 ## link to spider dat (will need real 2022 data to do so)
-##Update the plots for the new veg studd activity 1.4
+## Update the plots for the new veg stud activity 1.4
+## Email Luskin about GitHub progress
 
 # load all required packages
 library(DT)
