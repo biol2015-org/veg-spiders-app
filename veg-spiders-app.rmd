@@ -22,17 +22,17 @@ library(tidyverse) # always last to avoid conflicts
 # prevent r errors etc. appearing to user
 knitr::opts_chunk$set(echo = FALSE)
 
-dat_raw <- read_excel("data/processed_2023_M2-A1-A2_data.xlsx",
-                      sheet = "veg_data")
+dat_raw <- read_excel("data/processed/BIOL2015-M2-2024_plot-level.xlsx",
+                      sheet = "plot-level")
 
-dat <- dat_raw %>% 
-  mutate(year = as_factor(year))
+# no longer cleaning data at runtime, so nothing req'd here
+dat <- dat_raw 
 
 ```
 
 # Module 2 --- soil, vegetation and spiders
 ### BIOL2015 Field Ecology
-###### v2.0 | 12/05/2024 | jwh  
+###### v2.2 | 28/06/2024 | jwh  
 
 ```{r esquisse, echo=FALSE}
 
