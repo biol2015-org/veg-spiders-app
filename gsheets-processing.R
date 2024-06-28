@@ -6,19 +6,17 @@ library(readxl)
 library(writexl)
 library(tidyverse) # always last for conflicts
 
+# used to correct remarkable misspellings for this species
+loco_correct_spelling <- "lophostemon confertus"
+
 #
 ##### 1. define importing ranges and sheets #####
 
 # per-plot metadata ranges
 rng_plot_id <- "B2"
-rng_gps <- "B4"
+# rng_gps <- "B4"
 rng_date <- "B5"
 rng_weather <- "B6"
-
-# rngs_metadata <- c(rng_plot_id,
-#                    rng_gps,
-#                    rng_date,
-#                    rng_weather)
 
 # per-plot data ranges
 rng_burrows <- "B13:B112"
@@ -44,15 +42,15 @@ dat_plot_id <- map_dfr(.x = sheet_list,
                            mutate(sheet_id = .x)
                        })
 
-dat_gps <- map_dfr(.x = sheet_list,
-                   .f = function(.x) {
-                     read_excel("data/raw/M2-A1 datasheets (BIOL2015).xlsx",
-                                range = rng_gps,
-                                sheet = .x,
-                                col_names = c("gps"),
-                                na = c("", "N/A")) %>% 
-                       mutate(sheet_id = .x)
-                   })
+# dat_gps <- map_dfr(.x = sheet_list,
+#                    .f = function(.x) {
+#                      read_excel("data/raw/M2-A1 datasheets (BIOL2015).xlsx",
+#                                 range = rng_gps,
+#                                 sheet = .x,
+#                                 col_names = c("gps"),
+#                                 na = c("", "N/A")) %>% 
+#                        mutate(sheet_id = .x)
+#                    })
 
 dat_date <- map_dfr(.x = sheet_list,
                     .f = function(.x) {
@@ -77,11 +75,15 @@ dat_weather <- map_dfr(.x = sheet_list,
 dat_meta <- tibble(sheet_id = sheet_list) %>% 
   left_join(., dat_plot_id) %>% 
   left_join(., dat_date) %>% 
-  left_join(., dat_gps) %>% 
+  # left_join(., dat_gps) %>% 
   filter(!is.na(date)) %>% 
-  mutate(location = case_when(day(date) == 18 ~ "woodland",
-                              day(date) == 19 ~ "pioneer_woodland",
-                              day(date) == 20 ~ "mixed_forest"))
+  mutate(veg_type = case_when(day(date) == 18 ~ "2_woodland",
+                              day(date) == 19 ~ "1_pioneer_woodland",
+                              day(date) == 20 ~ "3_mixed_forest"),
+         # replacement for unreliable student gps points 
+         gps = case_when(veg_type == "1_pioneer_woodland" ~ "-25.5980, 153.0896",
+                         veg_type == "2_woodland" ~ "-25.5890, 153.0839",
+                         veg_type == "3_mixed_forest" ~ "-25.5668, 153.0701"))
 
 #
 ##### 3. import data for each sheet #####
@@ -125,15 +127,19 @@ dat_tall_trees <- map_dfr(.x = sheet_list,
                                        col_names = c("species",
                                                      "circum",
                                                      "dist_to_tree",
-                                                     "eye_hgt",
+                                                     "eye_hgt",  
                                                      "tree_hgt"),
                                        na = c("", "N/A")) %>% 
                               mutate(sheet_id = .x,
                                      species = str_to_lower(as.character(species))) %>% 
                               filter(!is.na({if("species" %in% names(.)) species else NULL}))
                           }) %>% 
-  mutate(dbh = round(circum / pi, 2),
-         ba = round(pi * (dbh/2)**2 / 10000, 4)) %>% 
+  mutate(species = case_when(str_detect(species, "lopho") ~ loco_correct_spelling,
+                             str_detect(species, "lophst") ~ loco_correct_spelling,
+                             .default = species),
+         # dbh = round(circum / pi, 2),
+         # ba = round(pi * (dbh/2)**2 / 10000, 4)
+  ) %>% 
   select(-c(circum, dist_to_tree, eye_hgt))
 
 dat_veg_structure <- map_dfr(.x = sheet_list,
@@ -148,6 +154,9 @@ dat_veg_structure <- map_dfr(.x = sheet_list,
                                  filter(!is.na({if("species" %in% names(.)) species else NULL}))
                              }) %>% 
   mutate(species = str_to_lower(species),
+         species = case_when(str_detect(species, "lopho") ~ loco_correct_spelling,
+                             str_detect(species, "lophst") ~ loco_correct_spelling,
+                             .default = species),
          ba = round(pi * (dbh/2)**2 / 10000, 4))
 
 #
@@ -166,18 +175,19 @@ dat_sum_small_quads <- dat_small_quads %>%
   summarise(across(c(foilage_cover, 
                      live_ground_cover,
                      leaf_litter_cover),
-                   ~mean(., na.rm = TRUE))) %>% 
+                   ~ mean(., na.rm = TRUE))) %>% 
   ungroup()
 
 dat_sum_tall_trees <- dat_tall_trees %>% 
   group_by(sheet_id) %>%
-  summarise(max_tall_tree_dbh = max(dbh,
-                                    na.rm = TRUE),
-            max_tall_tree_ba = max(ba,
-                                   na.rm = TRUE),
-            max_tall_tree_hgt = max(tree_hgt)) %>% 
+  summarise(
+    # max_tall_tree_dbh = max(dbh,
+    #                                 na.rm = TRUE),
+    #         max_tall_tree_ba = max(ba,
+    #                                na.rm = TRUE),
+    max_tall_tree_hgt = max(tree_hgt)) %>% 
   ungroup() %>% 
-  filter(!is.infinite(max_tall_tree_dbh))
+  filter(!is.infinite(max_tall_tree_hgt))
 
 dat_sum_veg_structure <- dat_veg_structure %>% 
   group_by(sheet_id) %>% 
@@ -186,8 +196,13 @@ dat_sum_veg_structure <- dat_veg_structure %>%
                              na.rm = TRUE), 2),
             ba = round(mean(ba,
                             na.rm = TRUE), 4),
-            stem_count = max(n)) %>%
-  ungroup()
+            stem_count = max(n)) %>% 
+  ungroup() %>%
+  # stem_count * 100 to convert stem count in sampled 100 m2 (10x10 m plots)
+  # to stem count in 10000 m2 (= 1 ha)
+  mutate(ba_per_ha = round(ba * (stem_count * 100), 2))
+# checked diffs in numbers if calculating ba per ha summatively instead and
+# and they were ~identical, so retaining this method because it is more common
 
 dat_plot_level<- dat_meta %>% 
   left_join(., dat_sum_burrows) %>% 
@@ -205,50 +220,53 @@ dat_meta_labels_point <- tibble(
                     "plot_id",
                     "date",
                     "gps",
-                    "location",
+                    "veg_type",
                     "burrow_width",
                     "burrow_count",
                     "foliage_cover",
                     "live_ground_cover",
                     "leaf_litter_cover",
-                    "max_tall_tree_dbh",
-                    "max_tall_tree_ba",
+                    # "max_tall_tree_dbh",
+                    # "max_tall_tree_ba",
                     "max_tall_tree_hgt",
                     "dbh",
                     "ba",
-                    "stem_count"),
-  comment = c("sequential sheet labels from the Google Sheet",
-              "your plot labels (unreliable)",
+                    "stem_count",
+                    "ba_per_ha"),
+  comment = c("sheet labels, per Google Sheet",
+              "plot labels, per you (unreliable...)",
               "",
-              "your plot coordinates (unreliable)",
-              "type of sample site, determined using the date",
+              "standardised plot coordinates",
+              "type of sample site, per course handbook; initial number shows order in which they were encountered on the hike",
               "",
               "",
               "foilage projected cover, per densiometer dots",
               "",
               "",
-              "",
-              "",
+              # "",
+              # "",
               "",
               "diameter at breast height",
               "basal area",
-              ""),
+              "",
+              "basal area per hectare"),
   units = c("",
             "",
-            "",
+            "yyyy/mm/dd",
             "lat, lon",
             "",
             "mean, mm",
-            "",
+            "#",
             "mean, %",
             "mean, %",
             "mean, %",
-            "cm",
-            "m^2",
+            # "cm",
+            # "m^2",
             "m",
             "mean, cm",
             "mean, m^2",
-            ""))
+            "# per plot",
+            "m^2 per ha"))
 
 write_xlsx(list(metadata = dat_meta_labels_point,
                 "plot-level" = dat_plot_level),
@@ -261,7 +279,7 @@ write_xlsx(list(metadata = dat_meta_labels_point,
 dat_meta_labels_obs <- tibble(
   variable_name = c("sheet_id",
                     "gps",
-                    "location",
+                    "veg_type",
                     "burrow_width",
                     "foliage_cover",
                     "live_ground_cover",
@@ -271,9 +289,9 @@ dat_meta_labels_obs <- tibble(
                     "tree_hgt",
                     "dbh",
                     "ba"),
-  comment = c("sequential sheet labels from the Google Sheet",
-              "your plot coordinates (unreliable)",
-              "type of sample site, determined using the date",
+  comment = c("sheet labels, per Google Sheet",
+              "standardised plot coordinates",
+              "type of sample site, per course handbook; intial number shows order in which they were encountered on the hike",
               "",
               "foilage projected cover, per densiometer dots",
               "",
@@ -297,22 +315,22 @@ dat_meta_labels_obs <- tibble(
             "m^2"))
 
 dat_meta_trim <- dat_meta %>% 
-  select(sheet_id, gps, location)
+  select(sheet_id, gps, veg_type)
 
 write_xlsx(list(
   metadata = dat_meta_labels_obs,
   "burrows" = dat_burrows %>% 
     left_join(., dat_meta_trim) %>% 
-    relocate(sheet_id, gps, location),
+    relocate(sheet_id, gps, veg_type),
   "small-quadrats" = dat_small_quads  %>% 
     left_join(., dat_meta_trim) %>% 
-    relocate(sheet_id, gps, location),
+    relocate(sheet_id, gps, veg_type),
   "tall-trees" = dat_tall_trees %>% 
     left_join(., dat_meta_trim) %>% 
-    relocate(sheet_id, gps, location),
+    relocate(sheet_id, gps, veg_type),
   "veg-structure" = dat_veg_structure %>% 
     left_join(., dat_meta_trim) %>% 
-    relocate(sheet_id, gps, location)),
+    relocate(sheet_id, gps, veg_type)),
   "data/processed/BIOL2015-M2-2024_obs-level.xlsx",
   format_headers = FALSE)
 
