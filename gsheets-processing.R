@@ -270,7 +270,7 @@ dat_meta_labels_point <- tibble(
 
 write_xlsx(list(metadata = dat_meta_labels_point,
                 "plot-level" = dat_plot_level),
-           "data/2025_data/processed/BIOL2015-M2-2024_plot-level.xlsx",
+           "data/2025_data/processed/BIOL2015-M2-2025_plot-level.xlsx",
            format_headers = FALSE)
 
 #
@@ -331,7 +331,7 @@ write_xlsx(list(
   "veg-structure" = dat_veg_structure %>% 
     left_join(., dat_meta_trim) %>% 
     relocate(sheet_id, gps, veg_type)),
-  "data/2025_data/processed/BIOL2015-M2-2024_obs-level.xlsx",
+  "data/2025_data/processed/BIOL2015-M2-2025_obs-level.xlsx",
   format_headers = FALSE)
 
 #
