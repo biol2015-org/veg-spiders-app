@@ -14,8 +14,7 @@ jobs:
           sudo apt-get install -y libcurl4-openssl-dev
       - name: Install rsconnect and dependencies
         run: |
-          install.packages(c('rsconnect', 'remotes', 'readxl', 'esquisse', 'shiny', 'tidyverse'))
-          # expect other pkgs from app rmd will be needed here
+          install.packages(c('rsconnect', 'remotes', 'readxl', 'esquisse', 'shiny'))
         shell: Rscript {0}
       - name: Deploy to shinyapps.io
         run: |
