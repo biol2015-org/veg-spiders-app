@@ -22,7 +22,7 @@ library(shiny)
 # prevent r errors etc. appearing to user
 knitr::opts_chunk$set(echo = FALSE)
 
-dat_raw <- read_excel("data/processed/BIOL2015-M2-2024_plot-level.xlsx",
+dat_raw <- read_excel("data/2025_data/processed/BIOL2015-M2-2025_plot-level.xlsx",
                       sheet = "plot-level")
 
 # no longer cleaning data at runtime, so nothing req'd here
@@ -32,7 +32,7 @@ dat <- dat_raw
 
 # Module 2 --- soil, vegetation and spiders
 ### BIOL2015 Field Ecology
-###### v2.2 | 08/04/2026 | jwh  
+###### v2.3 | 30/06/2025 | ecvw  
 
 ```{r esquisse, echo=FALSE}
 
