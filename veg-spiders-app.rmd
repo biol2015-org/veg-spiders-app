@@ -17,7 +17,7 @@ margin-right: auto;
 library(esquisse)
 library(readxl)
 library(shiny)
-library(tidyverse) # always last to avoid conflicts
+# library(tidyverse) 
 
 # prevent r errors etc. appearing to user
 knitr::opts_chunk$set(echo = FALSE)
@@ -32,7 +32,7 @@ dat <- dat_raw
 
 # Module 2 --- soil, vegetation and spiders
 ### BIOL2015 Field Ecology
-###### v2.2 | 28/06/2024 | jwh  
+###### v2.2 | 08/04/2026 | jwh  
 
 ```{r esquisse, echo=FALSE}
 
