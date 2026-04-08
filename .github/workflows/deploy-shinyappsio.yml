@@ -19,5 +19,5 @@ jobs:
       - name: Deploy to shinyapps.io
         run: |
           rsconnect::setAccountInfo(name="${{ secrets.SHINY_ACC_NAME }}", token="${{ secrets.SHINY_TOKEN }}", secret="${{ secrets.SHINY_SECRET }}")
-          rsconnect::deployApp(appName = 'veg-spiders-app', appFiles = c("veg-spiders-app.rmd", "data/processed/BIOL2015-M2-2024_plot-level.xlsx"), forceUpdate = TRUE)
+          rsconnect::deployApp(appName = 'veg-spiders-app', appFiles = c("veg-spiders-app.rmd", "data/processed/BIOL2015-M2-2025_plot-level.xlsx"), forceUpdate = TRUE)
         shell: Rscript {0}
