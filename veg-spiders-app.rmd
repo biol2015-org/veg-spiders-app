@@ -32,7 +32,7 @@ dat <- dat_raw
 
 # Module 2 --- soil, vegetation and spiders
 ### BIOL2015 Field Ecology
-###### v2.2 | 28/06/2024 | jwh  
+###### v2.3 | 30/06/2025 | ecvw  
 
 ```{r esquisse, echo=FALSE}
 
