@@ -15,11 +15,11 @@ jobs:
           sudo apt-get install -y libcurl4-openssl-dev
       - name: Install rsconnect and dependencies
         run: |
-          install.packages(c('rsconnect', 'remotes'))
+          install.packages(c('rsconnect', 'remotes', 'readxl', 'esquisse', 'shiny', 'tidyverse'))
           # expect other pkgs from app rmd will be needed here
         shell: Rscript {0}
       - name: Deploy to shinyapps.io
         run: |
           rsconnect::setAccountInfo(name="${{ secrets.SHINY_ACC_NAME }}", token="${{ secrets.SHINY_TOKEN }}", secret="${{ secrets.SHINY_SECRET }}")
-          rsconnect::deployApp(appName = 'veg-spiders-app')
+          rsconnect::deployApp(appName = 'veg-spiders-app', forceUpdate = TRUE)
         shell: Rscript {0}
