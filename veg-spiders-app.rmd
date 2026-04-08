@@ -22,7 +22,7 @@ library(shiny)
 # prevent r errors etc. appearing to user
 knitr::opts_chunk$set(echo = FALSE)
 
-dat_raw <- read_excel("data/2025_data/processed/BIOL2015-M2-2025_plot-level.xlsx",
+dat_raw <- read_excel("data/processed/BIOL2015-M2-2025_plot-level.xlsx",
                       sheet = "plot-level")
 
 # no longer cleaning data at runtime, so nothing req'd here
