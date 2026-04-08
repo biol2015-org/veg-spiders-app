@@ -17,7 +17,7 @@ margin-right: auto;
 library(esquisse)
 library(readxl)
 library(shiny)
-library(tidyverse) # always last to avoid conflicts
+# library(tidyverse) 
 
 # prevent r errors etc. appearing to user
 knitr::opts_chunk$set(echo = FALSE)
