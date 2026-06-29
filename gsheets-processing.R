@@ -24,7 +24,9 @@ rng_small_quads <- "E13:I17"
 rng_tall_trees <- "L13:P15"
 rng_veg_structure <- "S13:T112"
 
-sheet_list <- excel_sheets("data/2025_data/raw/M2-A1 datasheets (BIOL2015).xlsx")
+xlsx_location <- "data/raw/BIOL2015-M2-2025_raw.xlsx"
+
+sheet_list <- excel_sheets(xlsx_location)
 sheet_list <- sheet_list[sheet_list != "backend"]
 
 #
@@ -34,7 +36,7 @@ sheet_list <- sheet_list[sheet_list != "backend"]
 
 dat_plot_id <- map_dfr(.x = sheet_list,
                        .f = function(.x) {
-                         read_excel("data/2025_data/raw/M2-A1 datasheets (BIOL2015).xlsx",
+                         read_excel(xlsx_location,
                                     range = rng_plot_id,
                                     sheet = .x,
                                     col_names = c("plot_id"),
@@ -54,7 +56,7 @@ dat_plot_id <- map_dfr(.x = sheet_list,
 
 dat_date <- map_dfr(.x = sheet_list,
                     .f = function(.x) {
-                      read_excel("data/2025_data/raw/M2-A1 datasheets (BIOL2015).xlsx",
+                      read_excel(xlsx_location,
                                  range = rng_date,
                                  sheet = .x,
                                  col_names = c("date"),
@@ -64,7 +66,7 @@ dat_date <- map_dfr(.x = sheet_list,
 
 dat_weather <- map_dfr(.x = sheet_list,
                        .f = function(.x) {
-                         read_excel("data/2025_data/raw/M2-A1 datasheets (BIOL2015).xlsx",
+                         read_excel(xlsx_location,
                                     range = rng_weather,
                                     sheet = .x,
                                     col_names = c("weather"),
@@ -90,7 +92,7 @@ dat_meta <- tibble(sheet_id = sheet_list) %>%
 
 dat_burrows <- map_dfr(.x = sheet_list,
                        .f = function(.x) {
-                         read_excel("data/2025_data/raw/M2-A1 datasheets (BIOL2015).xlsx",
+                         read_excel(xlsx_location,
                                     range = rng_burrows,
                                     sheet = .x,
                                     col_names = c("burrow_width"),
@@ -101,7 +103,7 @@ dat_burrows <- map_dfr(.x = sheet_list,
 
 dat_small_quads <- map_dfr(.x = sheet_list,
                            .f = function(.x) {
-                             read_excel("data/2025_data/raw/M2-A1 datasheets (BIOL2015).xlsx",
+                             read_excel(xlsx_location,
                                         range = rng_small_quads,
                                         sheet = .x,
                                         col_names = c("quadrat_id",
@@ -121,7 +123,7 @@ dat_small_quads <- map_dfr(.x = sheet_list,
 
 dat_tall_trees <- map_dfr(.x = sheet_list,
                           .f = function(.x) {
-                            read_excel("data/2025_data/raw/M2-A1 datasheets (BIOL2015).xlsx",
+                            read_excel(xlsx_location,
                                        range = rng_tall_trees,
                                        sheet = .x,
                                        col_names = c("species",
@@ -144,7 +146,7 @@ dat_tall_trees <- map_dfr(.x = sheet_list,
 
 dat_veg_structure <- map_dfr(.x = sheet_list,
                              .f = function(.x) {
-                               read_excel("data/2025_data/raw/M2-A1 datasheets (BIOL2015).xlsx",
+                               read_excel(xlsx_location,
                                           range = rng_veg_structure,
                                           sheet = .x,
                                           col_names = c("species",
@@ -270,7 +272,7 @@ dat_meta_labels_point <- tibble(
 
 write_xlsx(list(metadata = dat_meta_labels_point,
                 "plot-level" = dat_plot_level),
-           "data/2025_data/processed/BIOL2015-M2-2025_plot-level.xlsx",
+           "data/processed/BIOL2015-M2-2025_plot-level.xlsx",
            format_headers = FALSE)
 
 #
@@ -331,7 +333,7 @@ write_xlsx(list(
   "veg-structure" = dat_veg_structure %>% 
     left_join(., dat_meta_trim) %>% 
     relocate(sheet_id, gps, veg_type)),
-  "data/2025_data/processed/BIOL2015-M2-2025_obs-level.xlsx",
+  "data/processed/BIOL2015-M2-2025_obs-level.xlsx",
   format_headers = FALSE)
 
 #

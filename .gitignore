@@ -48,3 +48,7 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 .positai
+
+# iOS directory files
+.DS_Store
+
