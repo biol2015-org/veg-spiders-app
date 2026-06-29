@@ -24,23 +24,25 @@ rng_small_quads <- "E13:I17"
 rng_tall_trees <- "L13:P15"
 rng_veg_structure <- "S13:T112"
 
+
+##### 2. import metadata for each sheet  #####
+
+# if there is only 1 datasheet
+
 sheet_list <- excel_sheets("data/2025_data/raw/M2-A1 datasheets (BIOL2015).xlsx")
 sheet_list <- sheet_list[sheet_list != "backend"]
 
-#
-##### 2. import metadata for each sheet  #####
-
-# use duplicated code in the interests of releasing data on time
 
 dat_plot_id <- map_dfr(.x = sheet_list,
                        .f = function(.x) {
-                         read_excel("data/2025_data/raw/M2-A1 datasheets (BIOL2015).xlsx",
+                         read_excel("data/2026_data/raw/NAME.xlsx",
                                     range = rng_plot_id,
                                     sheet = .x,
                                     col_names = c("plot_id"),
-                                    na = c("", "N/A")) %>% 
+                                    na = c("", "N/A")) %>%
                            mutate(sheet_id = .x)
                        })
+
 
 # dat_gps <- map_dfr(.x = sheet_list,
 #                    .f = function(.x) {
@@ -52,9 +54,9 @@ dat_plot_id <- map_dfr(.x = sheet_list,
 #                        mutate(sheet_id = .x)
 #                    })
 
-dat_date <- map_dfr(.x = sheet_list,
+dat_date <- pmap_df(.x = sheet_list,
                     .f = function(.x) {
-                      read_excel("data/2025_data/raw/M2-A1 datasheets (BIOL2015).xlsx",
+                      read_excel("data/2026_data/raw/NAME.xlsx",
                                  range = rng_date,
                                  sheet = .x,
                                  col_names = c("date"),
