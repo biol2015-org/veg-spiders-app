@@ -50,3 +50,4 @@ rsconnect/
 
 # add the silly mac ds hidden file to the git ignore becuse this will brake it
 .DS_Store
+.positai
