@@ -17,10 +17,11 @@ margin-right: auto;
 library(esquisse)
 library(readxl)
 library(shiny)
-library(tidyverse) # always last to avoid conflicts
+# library(tidyverse) 
 
 # prevent r errors etc. appearing to user
 knitr::opts_chunk$set(echo = FALSE)
+
 
 dat_raw <- read_excel("data/2026_data/processed/BIOL2015-M2-2026_plot-level.xlsx",
                       sheet = "plot-level")
@@ -32,7 +33,8 @@ dat <- dat_raw
 
 # Module 2 --- soil, vegetation and spiders
 ### BIOL2015 Field Ecology
-###### v2.3 | 30/06/2026 | ecvw  
+
+###### v2.3 | 30/06/2025 | ecvw  
 
 ```{r esquisse, echo=FALSE}
 
